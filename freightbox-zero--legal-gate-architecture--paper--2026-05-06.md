@@ -31,9 +31,51 @@ The question this paper addresses: given that AI can handle most NVOCC operation
 
 ---
 
-## 2. The Three-Layer Agent Safety Stack
+## 2. The Spawn Inheritance Foundation
 
-The naive approach to human-mandatory actions in an AI system is a single policy rule. Policy rules share a structural weakness: they are application logic, and application logic can be subverted. FreightBox Zero uses three independent enforcement layers. All three must fail simultaneously for a legal gate to be breached. Under normal operation, this is structurally impossible.
+Before describing the three enforcement layers, we state the mathematical invariant that underlies them. The three layers are implementations of this invariant at different points in the agent lifecycle. Understanding the invariant explains why no combination of bugs, misconfigurations, or adversarial inputs can cause a legal gate breach.
+
+**The Spawn Inheritance Invariant:**
+
+```
+child_spawn_mask & ~parent_mask == 0
+```
+
+A spawned agent's capability integer must be a strict subset of the spawning entity's capability integer. This holds transitively through every delegation tier:
+
+```
+Kiran_mask ⊆ FreightBox_service_trust_mask
+Arjun_mask ⊆ FreightBox_service_trust_mask
+Priya_mask ⊆ FreightBox_service_trust_mask
+  sub_agent_of_Priya_mask ⊆ Priya_mask ⊆ FreightBox_service_trust_mask
+```
+
+This is Unix `fork()` semantics applied to agent instantiation. A child process cannot grant itself permissions the parent process did not hold. Neither can a child agent.
+
+**Applied to FreightBox Zero:**
+
+The FreightBox service itself holds a `trust_mask` that includes all operational capability bits. It does not include legal gate bits — those are reserved exclusively for human sessions (Captain, Finance Principal). When the service spawns the six operating agents, each agent's `child_spawn_mask` is derived as a strict subset:
+
+| Agent | spawn_mask contains | spawn_mask never contains |
+|---|---|---|
+| Kiran (INTAKE) | quote_read, party_create, inquiry_respond | Any BL bit, any payment bit |
+| Arjun (BOOKING) | booking_create, si_submit, vgm_submit | BIT_BL_ISSUE, BIT_TELEX_RELEASE |
+| Priya (DOCUMENT) | bl_draft, si_validate, doc_generate | BIT_BL_ISSUE, BIT_TELEX_RELEASE |
+| Kavya (FINANCE) | invoice_create, payment_record, reconcile | BIT_LC_PRESENT, BIT_CREDIT_WRITEOFF |
+| Disha (TRACK) | container_read, ais_subscribe, event_record | All write bits |
+| Rekha (AEGIS GUARD) | sanctions_screen, risk_score, alert_create | BIT_OFAC_AUTH |
+
+Priya can draft a BL. She cannot issue one. Not because of a policy rule — because `BIT_BL_ISSUE` is not in her `spawn_mask`, and the spawn invariant guarantees it was never there. Even if Priya spawns a sub-agent to process a batch of shipping instructions, the sub-agent's mask is a strict subset of Priya's. `BIT_BL_ISSUE` cannot appear anywhere in the sub-agent spawn chain.
+
+**The invariant is what makes Layer 1 structural rather than policy-based.** The TRUST mask check in the `issueBL` resolver is the enforcement mechanism. The spawn invariant is why the bit is guaranteed to be absent.
+
+---
+
+## 3. The Three-Layer Agent Safety Stack
+
+The spawn inheritance invariant provides the mathematical guarantee. The three enforcement layers provide independent runtime enforcement — ensuring the invariant is observed even if the spawning service is compromised, the application runtime misbehaves, or the agent binary is tampered with.
+
+FreightBox Zero uses three independent enforcement layers. All three must fail simultaneously for a legal gate to be breached. Under normal operation, this is structurally impossible.
 
 ```
   ┌────────────────────────────────────────────────────────┐
@@ -226,7 +268,7 @@ The three layers are not redundant. They are complementary, each catching the cl
 
 ---
 
-## 3. The Six Agents and Their Autonomy Tiers
+## 4. The Six Agents and Their Autonomy Tiers
 
 FreightBox Zero operates six agents under the AnkrOS autonomy tier system:
 
@@ -249,7 +291,7 @@ The autonomy tier assignment is not a static configuration. Aegis Guard scores e
 
 ---
 
-## 4. Three Operating Modes
+## 5. Three Operating Modes
 
 The same platform serves three deployment configurations. The legal gate architecture is identical in all three — the gates cannot be disabled. The difference is the autonomy dial for non-gate actions.
 
@@ -273,7 +315,7 @@ The economic transformation: at 1,500 shipments per month, the Agentic Mode oper
 
 ---
 
-## 5. The Platform
+## 6. The Platform
 
 FreightBox Zero is built on the FreightBox platform (live, freightbox.org):
 - GraphQL API: 95 queries, 65 mutations, 8 real-time subscriptions
@@ -290,7 +332,7 @@ No new platform infrastructure is required for FreightBox Zero. All three safety
 
 ---
 
-## 6. VIVECHANA Decision Score
+## 7. VIVECHANA Decision Score
 
 Scored on 2026-05-06 per SAR-006 (DOI: 10.5281/zenodo.19456053):
 
@@ -311,7 +353,7 @@ V = 4,536 × 9 = 40,824
 
 ---
 
-## 7. Relationship to Prior Work
+## 8. Relationship to Prior Work
 
 The VIVECHANA protocol (DOI: 10.5281/zenodo.19456053) provides the decision-scoring framework used in Section 6.
 
@@ -325,13 +367,15 @@ The AEGIS system is described in: "AEGIS: An Evidence, Quality, and Authority Co
 
 The PRAMANA self-verifying cognition protocol (DOI: 10.5281/zenodo.19273330) provides the receipt chain foundation on which both the AEGIS Merkle ledger (service level) and KavachOS (kernel level) build their tamper-evident logs. Both services are PRAMANA-compliant: AEGIS at the approval-token and SENSE-event layer; KavachOS at the seccomp-bpf syscall layer.
 
-No existing academic or industry publication describes the combination of session-layer trust_mask enforcement (Layer 1), Hard Gate capability enforcement with Five Locks cryptographic approval tokens (Layer 2), and kernel-level seccomp-bpf receipt chain (Layer 3) as a unified agent safety stack for regulated entity compliance. This paper is the first description of that architecture.
+BitMask OS (companion paper, same author, 2026-05-06) formalizes the spawn inheritance invariant (`child_spawn_mask & ~parent_mask == 0`) as a universal protocol for autonomous agent networks. FreightBox Zero is the first domain application of that invariant to a regulated commercial entity — where the bits being protected are not generic capabilities but specific legal obligations (MLETR Article 7, UCP 600 Article 14, OFAC reasonable procedures). The spawn invariant provides the mathematical proof that legal gate bits cannot appear in any agent session; the three-layer stack provides the runtime enforcement.
+
+No existing academic or industry publication describes the combination of spawn inheritance invariant (foundation), session-layer trust_mask enforcement (Layer 1), Hard Gate capability enforcement with Five Locks cryptographic approval tokens (Layer 2), and kernel-level seccomp-bpf receipt chain (Layer 3) as a unified agent safety stack for a regulated commercial entity. This paper is the first description of that architecture.
 
 ---
 
-## 8. Conclusion
+## 9. Conclusion
 
-The inversion of the NVOCC operating model — from AI-as-assistant to AI-as-principal-operator — is made legally defensible by a three-layer agent safety stack. Layer 1 (TRUST mask) makes human-mandatory actions structurally impossible for agent sessions. Layer 2 (AEGIS Hard Gate) enforces capability-level gates via the `@ankr/aegis-guard` Five Locks SDK — approval tokens are minted by the human, cryptographically scoped, consumed once, and anchored in a Merkle ledger signed by Ed25519 — with the Captain's Command Centre dashboard providing the approval interface. Layer 3 (KavachOS kernel receipt) produces a tamper-evident, court-admissible record of what each agent actually did at OS level, independent of application logs.
+The inversion of the NVOCC operating model — from AI-as-assistant to AI-as-principal-operator — is made legally defensible by a spawn inheritance invariant and three runtime enforcement layers. The invariant (`child_spawn_mask & ~parent_mask == 0`) mathematically guarantees that legal gate bits cannot appear in any agent session regardless of runtime behaviour — no agent in the spawn chain can self-elevate above its parent's mask. Layer 1 (TRUST mask) enforces this at the resolver level. Layer 2 (AEGIS Hard Gate) enforces it before execution via Five Locks cryptographic approval tokens anchored in a Merkle ledger. Layer 3 (KavachOS kernel receipt) records it at OS level, tamper-evidently.
 
 The three layers are independent and complementary. Layer 1 eliminates policy bypass failures. Layer 2 catches Layer 1 bypass attempts before execution. Layer 3 provides kernel-level evidence independent of application logs. All three must fail simultaneously for a legal gate to be breached — a condition that is structurally impossible under normal operation and detectable within milliseconds under attack.
 

@@ -232,6 +232,8 @@ The Compliance Counsel: 10–15 hours/month reviewing novel legal scenarios Aegi
 
 The autonomy dial is the only thing that changes between modes. The platform, the agents, the data model, the legal gates — identical. A company running Man Mode has already built the full Agentic Mode capability. They are choosing not to activate it yet.
 
+**The spawn inheritance invariant runs in all three modes.** Every agent spawned by FreightBox — regardless of mode — receives a `child_spawn_mask` that is a strict subset of the spawning service's `trust_mask`. Legal gate bits (`BIT_BL_ISSUE`, `BIT_TELEX_RELEASE`, `BIT_LC_PRESENT`, `BIT_OFAC_AUTH`, `BIT_CREDIT_WRITEOFF`) are never present in the FreightBox service's spawn-eligible mask. This means no agent in any spawn chain — in Man Mode, Hybrid Mode, or Agentic Mode — can self-elevate to a legal gate capability. The constraint is `child_spawn_mask & ~parent_mask == 0`, enforced at instantiation time, not at call time. Formal specification: BitMask OS paper (companion, 2026-05-06).
+
 This is the product strategy. Man Mode is the onramp. Agentic Mode is the destination. Hybrid Mode is the journey.
 
 ---
